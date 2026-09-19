@@ -4,7 +4,7 @@
  */
 
 const CARD = "sb-nav-select";
-const VERSION = "0.1.1";
+const VERSION = "0.2.0";
 
 const fire = (node, type, detail) =>
   node.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
@@ -64,9 +64,27 @@ class SbNavSelect extends HTMLElement {
     return (this._config.items || []).filter((i) => i && (i.label || i.path));
   }
 
+  _parse(path) {
+    const [p, q] = String(path || "").split("?");
+    return { pathname: p, params: new URLSearchParams(q || "") };
+  }
+
   _currentIndex() {
-    const here = location.pathname + location.search;
-    return this._items().findIndex((i) => i.path === here);
+    if (!this._config.merge_query) {
+      const here = location.pathname + location.search;
+      return this._items().findIndex((i) => i.path === here);
+    }
+    // Merge mode: an item is "current" when its pathname matches and every
+    // param it sets (or clears) matches the live URL — other cards' params
+    // are none of our business.
+    const liveParams = new URLSearchParams(location.search);
+    return this._items().findIndex((i) => {
+      const { pathname, params } = this._parse(i.path);
+      if (pathname !== location.pathname) return false;
+      for (const [k, v] of params.entries())
+        if ((liveParams.get(k) || "") !== v) return false;
+      return true;
+    });
   }
 
   _syncSelection() {
@@ -108,7 +126,16 @@ class SbNavSelect extends HTMLElement {
         this._syncSelection();
         return;
       }
-      history.pushState(null, "", item.path);
+      let target = item.path;
+      if (this._config.merge_query) {
+        // Keep everyone else's query params; overlay ours (empty value clears).
+        const { pathname, params } = this._parse(item.path);
+        const merged = new URLSearchParams(location.search);
+        for (const [k, v] of params.entries()) v === "" ? merged.delete(k) : merged.set(k, v);
+        const q = merged.toString();
+        target = pathname + (q ? "?" + q : "");
+      }
+      history.pushState(null, "", target);
       fire(this, "location-changed", {});
     });
   }
@@ -195,8 +222,13 @@ class SbNavSelectEditor extends HTMLElement {
       this._form.schema = [
         { name: "title", selector: { text: {} } },
         { name: "placeholder", selector: { text: {} } },
+        { name: "merge_query", selector: { boolean: {} } },
       ];
-      this._form.computeLabel = (s) => ({ title: "Title", placeholder: "Placeholder (shown before a choice)" }[s.name] || s.name);
+      this._form.computeLabel = (s) => ({ title: "Title", placeholder: "Placeholder (shown before a choice)",
+        merge_query: "Merge query parameters" }[s.name] || s.name);
+      this._form.computeHelper = (s) => ({
+        merge_query: "Keep the URL's other parameters and only overlay this card's — lets several nav-selects drive different cards on one view. An empty value (seb-x=) clears that parameter.",
+      }[s.name]);
       this._form.addEventListener("value-changed", (e) => {
         this._config = { ...this._config, ...e.detail.value };
         this._emit();
