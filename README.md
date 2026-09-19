@@ -1,8 +1,18 @@
-# SB Nav Select
+# SB Filter Select
 
-A Home Assistant dashboard card: a **dropdown of destinations** — pick one,
-go there. Configure the list entirely in the visual editor (display text +
-path per row). No YAML, no helper entities.
+A Home Assistant dashboard card: a dropdown that **filters an
+[SB Entity Browser](https://github.com/snadboy/sb-entity-browser) card on the
+same view** — or navigates to configured destinations. Everything is set up
+in the visual editor. No YAML, no URLs to hand-craft, no helper entities.
+
+**Filter mode** (default): pick the target browser card from a dropdown (the
+editor finds the view's cards automatically), then add items as *label +
+pattern* — the same plain syntax as the browser card's own pattern field
+("fp300 occupancy"). Choosing an item rewrites only that card's query
+parameter, so several selects coexist on one view. An empty pattern means
+"show everything".
+
+**Navigate mode**: items are *label + path* destinations.
 
 - Paths navigate in place, query strings included — pairs perfectly with
   [SB Entity Browser](https://github.com/snadboy/sb-entity-browser)'s
@@ -21,8 +31,11 @@ path per row). No YAML, no helper entities.
 
 | Option | Meaning |
 |---|---|
+| `mode` | `filter` (default) or `navigate` |
+| `target` | Filter mode: the target browser card, picked from a dropdown |
 | `title` | Label to the left of the dropdown |
 | `placeholder` | Text shown before a choice (default "Select…") |
-| `items` | The destinations: `label` + `path` per row, edited visually |
+| `items` | `label` + `value` (filter) or `label` + `path` (navigate), edited visually |
+| `merge_query` | Navigate mode: keep the URL's other query parameters |
 
 MIT licensed.
