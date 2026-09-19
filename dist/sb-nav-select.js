@@ -4,7 +4,7 @@
  */
 
 const CARD = "sb-nav-select";
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 
 const fire = (node, type, detail) =>
   node.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
@@ -87,7 +87,11 @@ class SbNavSelect extends HTMLElement {
                  background: var(--mdc-text-field-fill-color, rgba(127,127,127,.12));
                  border: none; border-bottom: 1px solid var(--divider-color);
                  border-radius: 4px 4px 0 0; padding: 10px 12px; cursor: pointer;
-                 outline-color: var(--primary-color); }
+                 outline-color: var(--primary-color); color-scheme: light dark; }
+        /* The native popup ignores the page theme: without explicit option
+           colors, dark themes get light-gray text on a white popup. */
+        option { background: var(--card-background-color, Canvas);
+                 color: var(--primary-text-color, CanvasText); }
       </style>
       <ha-card>
         ${this._config.title ? `<div class="title">${esc(this._config.title)}</div>` : ""}
