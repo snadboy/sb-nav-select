@@ -13,7 +13,7 @@
  */
 
 const CARD = "sb-nav-select";
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 
 const fire = (node, type, detail) =>
   node.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
@@ -21,16 +21,20 @@ const fire = (node, type, detail) =>
 const esc = (v) =>
   String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-// Find the SB Entity Browser cards currently in the document (shadow roots
-// included) — how the editor offers targets without anyone typing an id.
+// Find the filter targets currently in the document (shadow roots included)
+// — how the editor offers targets without anyone typing an id. Any card can
+// opt in by setting `_sbFilterTarget = {id, title}` (SB Param Card does);
+// SB Entity Browser is recognised by its config for older versions.
 const findBrowserCards = () => {
   const out = [];
+  const add = (id, title) => {
+    if (id && !out.some((o) => o.id === id)) out.push({ id, title: title || id });
+  };
   const walk = (root) => {
     for (const el of root.querySelectorAll("*")) {
-      if (el.tagName === "SB-ENTITY-BROWSER" && el._config?.storage_id) {
-        if (!out.some((o) => o.id === el._config.storage_id))
-          out.push({ id: el._config.storage_id, title: el._config.title || el._config.storage_id });
-      }
+      if (el._sbFilterTarget) add(el._sbFilterTarget.id, el._sbFilterTarget.title);
+      else if (el.tagName === "SB-ENTITY-BROWSER" && el._config?.storage_id)
+        add(el._config.storage_id, el._config.title);
       if (el.shadowRoot) walk(el.shadowRoot);
     }
   };
@@ -242,7 +246,7 @@ class SbNavSelectEditor extends HTMLElement {
       });
       const val = this._input(
         item[key],
-        filter ? "Pattern — e.g. fp300 occupancy (empty = show all)" : "/dashboard/view or https://…",
+        filter ? "Pattern or parameter value — e.g. fp300 occupancy" : "/dashboard/view or https://…",
         "1.6",
         () => {
           this._config.items[i] = { ...this._config.items[i], [key]: val.value };
