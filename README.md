@@ -36,6 +36,9 @@ parameter, so several selects coexist on one view. An empty pattern means
 | `title` | Label to the left of the dropdown |
 | `placeholder` | Text shown before a choice (default "Select…") |
 | `items` | `label` + `value` (filter) or `label` + `path` (navigate), edited visually |
+| `items_source` | `static` (default) or `entity` — choices from live state |
+| `source_entity` / `source_attribute` | Where dynamic choices come from: a dict attribute contributes its keys, a list its entries |
+| `source_all_label` | Optional first choice that clears the filter (e.g. "All lines") |
 | `merge_query` | Navigate mode: keep the URL's other query parameters |
 
 MIT licensed.

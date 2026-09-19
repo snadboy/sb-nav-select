@@ -13,7 +13,7 @@
  */
 
 const CARD = "sb-nav-select";
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 
 const fire = (node, type, detail) =>
   node.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
@@ -42,6 +42,39 @@ const findBrowserCards = () => {
   return out;
 };
 
+
+// ---- choices from live state -------------------------------------------
+// A dict attribute (sensor.metra_schedule -> lines) yields its keys; a list
+// yields its entries; a list of objects yields label/value fields. Resolved
+// synchronously from hass, so there is no async gap before the card renders.
+const resolveItems = (hass, config) => {
+  if (config.items_source !== "entity") return config.items || [];
+  const st = hass?.states?.[config.source_entity];
+  const raw = st?.attributes?.[config.source_attribute];
+  let out = [];
+  if (Array.isArray(raw)) {
+    out = raw.map((item) => {
+      if (item && typeof item === "object") {
+        const value = config.source_value_field ? item[config.source_value_field]
+          : item.value ?? item.id ?? item.name;
+        const label = config.source_label_field ? item[config.source_label_field]
+          : item.label ?? item.name ?? value;
+        return { label: String(label ?? ""), value: String(value ?? "") };
+      }
+      return { label: String(item), value: String(item) };
+    });
+  } else if (raw && typeof raw === "object") {
+    out = Object.keys(raw).map((k) => ({ label: k, value: k }));
+  }
+  out = out.filter((i) => i.value !== "");
+  if (config.source_sort !== false)
+    out.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+  if (config.source_all_label) out.unshift({ label: config.source_all_label, value: "" });
+  return out;
+};
+
+const itemsSignature = (items) => items.map((i) => i.label + "\u0000" + i.value).join("|");
+
 class SbNavSelect extends HTMLElement {
   constructor() {
     super();
@@ -61,7 +94,7 @@ class SbNavSelect extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config || !(config.items || []).length) {
+    if (!config || (config.items_source !== "entity" && !(config.items || []).length)) {
       throw new Error("Add at least one item");
     }
     // Back-compat: configs from before modes existed are navigate configs.
@@ -72,7 +105,14 @@ class SbNavSelect extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (!this._rendered) this._render();
+    if (!this._rendered) {
+      this._render();
+      return;
+    }
+    if (this._config?.items_source === "entity") {
+      const sig = itemsSignature(this._items());
+      if (sig !== this._itemsSig) this._render();
+    }
   }
 
   getCardSize() {
@@ -91,7 +131,7 @@ class SbNavSelect extends HTMLElement {
   }
 
   _items() {
-    return (this._config.items || []).filter((i) => i && (i.label || i.path || i.value));
+    return resolveItems(this._hass, this._config).filter((i) => i && (i.label || i.path || i.value));
   }
 
   _paramKey() {
@@ -163,6 +203,7 @@ class SbNavSelect extends HTMLElement {
     if (!this._config) return;
     this._rendered = true;
     const items = this._items();
+    this._itemsSig = itemsSignature(items);
     const cur = this._currentIndex();
     const unconfigured = this._mode === "filter" && !this._config.target;
     this.shadowRoot.innerHTML = `
@@ -230,7 +271,29 @@ class SbNavSelectEditor extends HTMLElement {
   }
 
   // Rebuild rows only on add/delete or mode switch; typing edits in place.
+  // Dynamic mode replaces the hand-typed rows with a live preview of what
+  // the chosen entity attribute currently resolves to.
+  _renderDynamicPreview() {
+    const items = resolveItems(this._hass, this._config);
+    this._wrap.innerHTML = "";
+    this._rows = null;
+    const box = document.createElement("div");
+    box.style.cssText =
+      "padding:10px 12px; border:1px dashed var(--divider-color); border-radius:8px; color:var(--secondary-text-color); font-size:.85em;";
+    box.textContent = items.length
+      ? `${items.length} choice${items.length === 1 ? "" : "s"}: ` +
+        items.slice(0, 12).map((i) => i.label).join(", ") + (items.length > 12 ? "…" : "")
+      : "No choices yet — pick an entity and an attribute that holds a list or a dictionary.";
+    this._wrap.appendChild(box);
+    this._hint.textContent =
+      "Choices follow the entity, so they stay correct when the underlying list changes.";
+  }
+
   _renderItems() {
+    if (this._config.items_source === "entity") {
+      this._renderDynamicPreview();
+      return;
+    }
     const items = this._config.items || [];
     if (this._rows && this._rows.length === items.length) return;
     const filter = this._mode === "filter";
@@ -284,22 +347,64 @@ class SbNavSelectEditor extends HTMLElement {
       : "Paths navigate in place; http(s) URLs open in a new tab. “Merge query parameters” keeps other cards' filters intact.";
   }
 
+  // Attribute list (and, for lists of objects, their field names) comes from
+  // the entity's live state — no typing ids by hand.
+  _dynamicSchema() {
+    const st = this._hass?.states?.[this._config.source_entity];
+    const attrs = Object.keys(st?.attributes || {}).filter(
+      (k) => !["friendly_name", "icon", "device_class", "unit_of_measurement", "state_class"].includes(k)
+    );
+    const raw = st?.attributes?.[this._config.source_attribute];
+    const objFields =
+      Array.isArray(raw) && raw[0] && typeof raw[0] === "object" ? Object.keys(raw[0]) : [];
+    const fieldSel = (name) => ({
+      name,
+      selector: { select: { mode: "dropdown", options: objFields.map((f) => ({ value: f, label: f })) } },
+    });
+    return [
+      { name: "source_entity", selector: { entity: {} } },
+      {
+        name: "source_attribute",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: attrs.length
+              ? attrs.map((a) => ({ value: a, label: a }))
+              : [{ value: this._config.source_attribute || "", label: "(pick an entity first)" }],
+          },
+        },
+      },
+      ...(objFields.length ? [fieldSel("source_label_field"), fieldSel("source_value_field")] : []),
+      { name: "source_all_label", selector: { text: {} } },
+    ];
+  }
+
   _render() {
     if (!this._form) {
       this._form = document.createElement("ha-form");
       this._form.computeLabel = (s) =>
         ({ mode: "Mode", target: "Target card (on this view)", title: "Title",
-           placeholder: "Placeholder (shown before a choice)", merge_query: "Merge query parameters" }[s.name] || s.name);
+           placeholder: "Placeholder (shown before a choice)", merge_query: "Merge query parameters",
+           items_source: "Choices", source_entity: "Entity", source_attribute: "Attribute",
+           source_label_field: "Label field", source_value_field: "Value field",
+           source_all_label: "Extra \u201cshow all\u201d choice" }[s.name] || s.name);
       this._form.computeHelper = (s) =>
         ({ target: "The SB Entity Browser card this dropdown filters. Cards are found automatically on the current view.",
-           merge_query: "Keep the URL's other parameters and only overlay each destination's own." }[s.name]);
+           merge_query: "Keep the URL's other parameters and only overlay each destination's own.",
+           source_attribute: "An attribute holding a list or a dictionary \u2014 a dictionary contributes its keys.",
+           source_all_label: "Optional first choice that clears the filter, e.g. \u201cAll lines\u201d." }[s.name]);
       this._form.addEventListener("value-changed", (e) => {
         const modeChanged = e.detail.value.mode && e.detail.value.mode !== this._mode;
+        const sourceChanged =
+          e.detail.value.items_source !== this._config.items_source ||
+          e.detail.value.source_entity !== this._config.source_entity ||
+          e.detail.value.source_attribute !== this._config.source_attribute;
         this._config = { ...this._config, ...e.detail.value };
         if (modeChanged) {
           this._mode = this._config.mode;
           this._rows = null;
         }
+        if (sourceChanged) this._rows = null;
         this._emit();
         this._render();
       });
@@ -342,11 +447,24 @@ class SbNavSelectEditor extends HTMLElement {
             },
           }]
         : [{ name: "merge_query", selector: { boolean: {} } }]),
+      {
+        name: "items_source",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "static", label: "Typed in below" },
+              { value: "entity", label: "From an entity attribute" },
+            ],
+          },
+        },
+      },
+      ...(this._config.items_source === "entity" ? this._dynamicSchema() : []),
       { name: "title", selector: { text: {} } },
       { name: "placeholder", selector: { text: {} } },
     ];
     this._form.hass = this._hass;
-    this._form.data = { mode: this._mode, ...this._config };
+    this._form.data = { items_source: "static", ...this._config, mode: this._mode };
     this._renderItems();
   }
 }
