@@ -62,3 +62,10 @@ repo name always said: a dropdown of destinations (label + path,
 items went with the filter mode. A leftover `mode: filter` config renders a
 notice instead of a select. HACS/picker name back to **SB Nav Select**
 (it was "SB Filter Select" for one day, v0.6.x).
+
+## RETIRED 2026-09-23
+
+Removed from HACS on the user's HA, repo archived. Zero cards on any
+dashboard; Monitor had 74 native navigate actions and no need for a
+dropdown of destinations. Navigation was only ever the scaffolding filter
+mode stood on; filter mode is SB Param Card's `show_selector` now.

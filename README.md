@@ -1,3 +1,9 @@
+# SB Nav Select — RETIRED (2026-09-23)
+
+**This card is retired and the repository is archived.** Its reason to exist — driving a parameter on a view from a dropdown — lives in [SB Param Card](https://github.com/snadboy/sb-param-card) (*Show a dropdown*). Navigation between views is better served by Home Assistant's own view tabs and `navigate` actions. The last release, v0.7.0, remains installable but is unmaintained.
+
+---
+
 # SB Nav Select
 
 A Home Assistant dashboard card: a dropdown of **destinations**. Everything is
