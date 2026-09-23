@@ -53,3 +53,12 @@ The user spotted the card answering to two names — HACS/`hacs.json` said
 path and element tag stay `sb-nav-select` (renaming those breaks the
 install and every dashboard). `sb-nav-select` is a historical name from
 when navigate mode was the only mode.
+
+## v0.7.0 — navigation only (2026-09-23)
+
+Filter mode moved to SB Param Card (`show_selector`). This card is what its
+repo name always said: a dropdown of destinations (label + path,
+`merge_query`). The knob registry, target discovery and entity-sourced
+items went with the filter mode. A leftover `mode: filter` config renders a
+notice instead of a select. HACS/picker name back to **SB Nav Select**
+(it was "SB Filter Select" for one day, v0.6.x).
