@@ -1,6 +1,6 @@
 /* SB Filter Select — a dropdown that filters or navigates.
  *
- * Filter mode (default): target an SB Entity Browser card ON THIS VIEW —
+ * Filter mode (default): target an SB Param Card (a "socket") ON THIS VIEW —
  * picked from a dropdown in the editor, no URLs involved — and each item is
  * a label + a plain pattern (same syntax as the browser card's own pattern
  * field). Choosing an item rewrites only that card's query parameter in
@@ -13,7 +13,7 @@
  */
 
 const CARD = "sb-nav-select";
-const VERSION = "0.5.0";
+const VERSION = "0.6.0";
 
 const fire = (node, type, detail) =>
   node.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
@@ -22,10 +22,11 @@ const esc = (v) =>
   String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // Find the filter targets currently in the document (shadow roots included)
-// — how the editor offers targets without anyone typing an id. Any card can
-// opt in by setting `_sbFilterTarget = {id, title}` (SB Param Card does);
-// SB Entity Browser is recognised by its config for older versions.
-const findBrowserCards = () => {
+// — how the editor offers targets without anyone typing an id. A socket
+// opts in by setting `_sbFilterTarget = {id, title}` (SB Param Card does).
+// Since 0.6.0 SB Entity Browser is no longer a target itself: it is wrapped
+// in a Param Card like any other card.
+const findTargets = () => {
   const out = [];
   const add = (id, title) => {
     if (id && !out.some((o) => o.id === id)) out.push({ id, title: title || id });
@@ -33,14 +34,21 @@ const findBrowserCards = () => {
   const walk = (root) => {
     for (const el of root.querySelectorAll("*")) {
       if (el._sbFilterTarget) add(el._sbFilterTarget.id, el._sbFilterTarget.title);
-      else if (el.tagName === "SB-ENTITY-BROWSER" && el._config?.storage_id)
-        add(el._config.storage_id, el._config.title);
       if (el.shadowRoot) walk(el.shadowRoot);
     }
   };
   walk(document);
   return out;
 };
+
+// ---- the knob registry ----------------------------------------------------
+// A filter-mode select publishes its resolved choices under its key, so the
+// sockets sharing that key (SB Param Card) allowlist exactly these values
+// without carrying a second copy of the list. Page-global on purpose: cards
+// cannot see each other, and the URL — the wire between them — is global too.
+const KNOBS = (window.__sbKnobs = window.__sbKnobs || new Map());
+const announce = (key) =>
+  window.dispatchEvent(new CustomEvent("sb-knob-changed", { detail: { key } }));
 
 
 // ---- choices from live state -------------------------------------------
@@ -123,11 +131,29 @@ class SbNavSelect extends HTMLElement {
     this._onNav = () => this._syncSelection();
     window.addEventListener("location-changed", this._onNav);
     window.addEventListener("popstate", this._onNav);
+    // HA builds cards detached and re-attaches them during layout.
+    if (this._config) this._publish();
   }
 
   disconnectedCallback() {
     window.removeEventListener("location-changed", this._onNav);
     window.removeEventListener("popstate", this._onNav);
+    const key = this._paramKey();
+    if (KNOBS.get(key)?.el === this) {
+      KNOBS.delete(key);
+      announce(key);
+    }
+  }
+
+  /** Publish this knob's choices for the sockets sharing its key. */
+  _publish() {
+    if (this._mode !== "filter" || !this._config?.target) return;
+    const key = this._paramKey();
+    const items = this._items().map((i) => ({ label: i.label || i.value || "", value: (i.value || "").trim() }));
+    const prev = KNOBS.get(key);
+    if (prev && prev.el === this && prev.sig === this._itemsSig) return;
+    KNOBS.set(key, { el: this, items, sig: this._itemsSig });
+    announce(key);
   }
 
   _items() {
@@ -204,6 +230,7 @@ class SbNavSelect extends HTMLElement {
     this._rendered = true;
     const items = this._items();
     this._itemsSig = itemsSignature(items);
+    this._publish();
     const cur = this._currentIndex();
     const unconfigured = this._mode === "filter" && !this._config.target;
     this.shadowRoot.innerHTML = `
@@ -343,7 +370,7 @@ class SbNavSelectEditor extends HTMLElement {
     });
     this._wrap.appendChild(add);
     this._hint.textContent = filter
-      ? "Patterns use the target card's own syntax: words match ids AND friendly names in any order (“fp300 occupancy”); * wildcards work. An empty pattern shows everything."
+      ? "Each value is handed to the target SB Param Card and lands wherever its $parameter$ appears — an entity id, a template, or an Entity Browser's filter (words match ids AND names, * wildcards work). An empty value clears the parameter."
       : "Paths navigate in place; http(s) URLs open in a new tab. “Merge query parameters” keeps other cards' filters intact.";
   }
 
@@ -389,7 +416,7 @@ class SbNavSelectEditor extends HTMLElement {
            source_label_field: "Label field", source_value_field: "Value field",
            source_all_label: "Extra \u201cshow all\u201d choice" }[s.name] || s.name);
       this._form.computeHelper = (s) =>
-        ({ target: "The SB Entity Browser card this dropdown filters. Cards are found automatically on the current view.",
+        ({ target: "The SB Param Card (the socket) this dropdown drives. Cards on the current view are found automatically; a Param Card wrapping an Entity Browser is how a browser gets filtered.",
            merge_query: "Keep the URL's other parameters and only overlay each destination's own.",
            source_attribute: "An attribute holding a list or a dictionary \u2014 a dictionary contributes its keys.",
            source_all_label: "Optional first choice that clears the filter, e.g. \u201cAll lines\u201d." }[s.name]);
@@ -420,7 +447,7 @@ class SbNavSelectEditor extends HTMLElement {
       this.appendChild(this._hint);
     }
     const filter = this._mode === "filter";
-    const targets = filter ? findBrowserCards() : [];
+    const targets = filter ? findTargets() : [];
     this._form.schema = [
       {
         name: "mode",
@@ -442,7 +469,7 @@ class SbNavSelectEditor extends HTMLElement {
                 mode: "dropdown",
                 options: targets.length
                   ? targets.map((t) => ({ value: t.id, label: t.title }))
-                  : [{ value: this._config.target || "", label: "(no browser cards found on this view)" }],
+                  : [{ value: this._config.target || "", label: "(no SB Param Cards found on this view)" }],
               },
             },
           }]

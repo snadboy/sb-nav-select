@@ -25,3 +25,22 @@ native-select popup needs option colors + color-scheme for dark themes).
 Selection syncs to the current URL (location-changed/popstate). Three demo
 filter-mode cards on dashboard-monitor/card-lab (occ/switches/batteries —
 the Batteries one is USER-built via GUI; view is GUI-owned, edit surgically).
+
+## v0.6.0 — the knob (2026-09-23)
+
+The three cards were confusing the user ("don't Filter Select and Param Card
+do the same thing?"). They did not, but Param Card carried a labelled choice
+list it never displayed, and Entity Browser read the URL on its own — two
+exceptions to a model that is otherwise one wire and three roles:
+
+- **knob** = this card: the only one that offers a choice, writes the URL.
+- **socket** = SB Param Card: the only one that reads the URL.
+- **everything else is just a card**, Entity Browser included (wrapped).
+
+What changed here: a filter-mode select **publishes its resolved choices**
+under its key in `window.__sbKnobs` (`_publish()`, on render/connect; deleted
+on disconnect) and fires `sb-knob-changed` on `window`. Sockets sharing the
+key allowlist exactly those values. Page-global on purpose: cards cannot see
+each other and the URL is global too. Target discovery (`findTargets`) now
+recognises only `_sbFilterTarget` — Entity Browser is no longer a target.
+Editor wording follows.
