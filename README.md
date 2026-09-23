@@ -40,7 +40,7 @@ the sockets know what to accept.
 
 1. HACS → custom repositories → `snadboy/sb-nav-select`, category **Dashboard**.
 2. Install, refresh the browser.
-3. Add card → "SB Nav Select". Add destinations in the editor.
+3. Add card → "SB Filter Select". Pick the target socket and add choices in the editor.
 
 ## Options
 

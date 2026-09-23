@@ -13,7 +13,7 @@
  */
 
 const CARD = "sb-nav-select";
-const VERSION = "0.6.0";
+const VERSION = "0.6.1";
 
 const fire = (node, type, detail) =>
   node.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
@@ -502,7 +502,7 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: CARD,
   name: "SB Filter Select",
-  description: "A dropdown that filters an SB Entity Browser card on the view (picked visually — no URLs), or navigates to configured destinations.",
+  description: "The knob: a dropdown that drives SB Param Cards on the view (picked visually — no URLs), or navigates to configured destinations.",
   preview: true,
   documentationURL: "https://github.com/snadboy/sb-nav-select",
 });

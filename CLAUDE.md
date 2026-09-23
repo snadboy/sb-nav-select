@@ -44,3 +44,12 @@ key allowlist exactly those values. Page-global on purpose: cards cannot see
 each other and the URL is global too. Target discovery (`findTargets`) now
 recognises only `_sbFilterTarget` — Entity Browser is no longer a target.
 Editor wording follows.
+
+## One name: SB Filter Select (v0.6.1, 2026-09-23)
+
+The user spotted the card answering to two names — HACS/`hacs.json` said
+"SB Nav Select", the picker and every README said "SB Filter Select". Now
+"SB Filter Select" everywhere user-facing; the repo slug, HACS repository
+path and element tag stay `sb-nav-select` (renaming those breaks the
+install and every dashboard). `sb-nav-select` is a historical name from
+when navigate mode was the only mode.
